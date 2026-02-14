@@ -37,6 +37,10 @@ dependencies:
   file_picker: ^8.1.4
   postgres: ^2.6.2
   crypto: ^3.0.3
+  firebase_core: ^3.8.1
+  firebase_storage: ^12.3.8
+  url_launcher: ^6.2.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

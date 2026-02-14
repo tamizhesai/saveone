@@ -1,32 +1,43 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../config/theme.dart';
+import '../services/database_service.dart';
 import '../services/auth_service.dart';
-import 'signin_page.dart';
 import 'main_navigation.dart';
-import 'fingerprint_signup_page.dart';
 
-class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+class FingerprintSignupPage extends StatefulWidget {
+  const FingerprintSignupPage({super.key});
 
   @override
-  State<SignUpPage> createState() => _SignUpPageState();
+  State<FingerprintSignupPage> createState() => _FingerprintSignupPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage> {
+class _FingerprintSignupPageState extends State<FingerprintSignupPage> {
   final _formKey = GlobalKey<FormState>();
+  final _fingerprintIdController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nomineeController = TextEditingController();
+  final _databaseService = DatabaseService();
   final _authService = AuthService();
   bool _isLoading = false;
+  bool _isFetching = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  String _statusMessage = 'Waiting for new fingerprint...';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFingerprintId();
+  }
 
   @override
   void dispose() {
+    _fingerprintIdController.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -36,32 +47,80 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  Future<void> _handleSignUp() async {
+  Future<void> _fetchFingerprintId() async {
+    setState(() {
+      _isFetching = true;
+      _statusMessage = 'Checking for new fingerprint...';
+    });
+
+    try {
+      final scan = await _databaseService.getLatestFingerprintScan();
+      if (scan != null && scan['type'] == 'signup') {
+        setState(() {
+          _fingerprintIdController.text = scan['fingerprintId'].toString();
+          _statusMessage = 'New fingerprint ID received!';
+          _isFetching = false;
+        });
+        await _databaseService.clearLatestFingerprintScan();
+      } else {
+        setState(() {
+          _statusMessage = 'No new fingerprint. Place NEW finger on sensor.';
+          _isFetching = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error fetching scan. Try refresh.';
+        _isFetching = false;
+      });
+    }
+  }
+
+  Future<void> _handleFingerprintSignup() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      final success = await _authService.signUp(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-        password: _passwordController.text,
-        nomineeNumber: _nomineeController.text.trim(),
-      );
-
-      setState(() => _isLoading = false);
-
-      if (success && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigation()),
+      try {
+        final fingerprintId = int.parse(_fingerprintIdController.text.trim());
+        
+        final userId = await _databaseService.signupWithFingerprint(
+          fingerprintId: fingerprintId,
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          phoneNumber: _phoneController.text.trim(),
+          password: _passwordController.text,
+          nomineeNumber: _nomineeController.text.trim(),
         );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sign up failed. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+        setState(() => _isLoading = false);
+
+        if (userId != null && mounted) {
+          final user = await _databaseService.loginWithFingerprint(fingerprintId);
+          if (user != null) {
+            await _authService.saveUser(user);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainNavigation()),
+            );
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign up failed. Fingerprint may already be registered.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -69,6 +128,11 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Sign Up with Fingerprint'),
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -77,19 +141,93 @@ class _SignUpPageState extends State<SignUpPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
+                Icon(
+                  Icons.fingerprint,
+                  size: 80,
+                  color: AppTheme.primary,
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  'Create Account',
-                  style: Theme.of(context).textTheme.headlineLarge,
+                  'Create Account with Fingerprint',
+                  style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Sign up to get started',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                  textAlign: TextAlign.center,
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, color: AppTheme.primary, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Steps:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textBlack,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '1. Place NEW finger on ESP32 sensor\n'
+                        '2. Wait for enrollment (remove & place again)\n'
+                        '3. Check Serial Monitor for "New fingerprint ID: X"\n'
+                        '4. Enter that ID below with your details',
+                        style: TextStyle(color: AppTheme.textDark, height: 1.5),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _fingerprintIdController,
+                        keyboardType: TextInputType.number,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Fingerprint ID',
+                          prefixIcon: Icon(Icons.fingerprint, color: AppTheme.primary),
+                          helperText: _statusMessage,
+                          suffixIcon: _fingerprintIdController.text.isNotEmpty
+                              ? const Icon(Icons.check_circle, color: Colors.green)
+                              : null,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'No fingerprint detected';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _isFetching ? null : _fetchFingerprintId,
+                      icon: _isFetching
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh, size: 32),
+                      color: AppTheme.primary,
+                      tooltip: 'Fetch Fingerprint ID',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -200,7 +338,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   decoration: const InputDecoration(
                     labelText: 'Nominee Number',
                     prefixIcon: Icon(Icons.contact_phone, color: AppTheme.primary),
-                    helperText: 'Emergency contact if biometric is not accessible',
+                    helperText: 'Emergency contact',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -216,7 +354,9 @@ class _SignUpPageState extends State<SignUpPage> {
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleSignUp,
+                    onPressed: (_isLoading || _fingerprintIdController.text.isEmpty) 
+                        ? null 
+                        : _handleFingerprintSignup,
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
@@ -225,64 +365,7 @@ class _SignUpPageState extends State<SignUpPage> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'OR',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const FingerprintSignupPage()),
-                    );
-                  },
-                  icon: const Icon(Icons.fingerprint, size: 28),
-                  label: const Text(
-                    'Sign Up with Fingerprint',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primary,
-                    side: const BorderSide(color: AppTheme.primary, width: 2),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Already have an account? ',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const SignInPage()),
-                        );
-                      },
-                      child: const Text(
-                        'Sign In',
-                        style: TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),

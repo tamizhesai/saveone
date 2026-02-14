@@ -2,16 +2,20 @@ class DocumentModel {
   final int? id;
   final int userId;
   final String fileName;
-  final String filePath;
+  final String firebaseUrl;
+  final String firebasePath;
   final int fileSize;
+  final String? fileType;
   final DateTime uploadedAt;
 
   DocumentModel({
     this.id,
     required this.userId,
     required this.fileName,
-    required this.filePath,
+    required this.firebaseUrl,
+    required this.firebasePath,
     required this.fileSize,
+    this.fileType,
     required this.uploadedAt,
   });
 
@@ -20,8 +24,10 @@ class DocumentModel {
       id: json['id'],
       userId: json['user_id'],
       fileName: json['file_name'],
-      filePath: json['file_path'],
+      firebaseUrl: json['firebase_url'],
+      firebasePath: json['firebase_path'],
       fileSize: json['file_size'],
+      fileType: json['file_type'],
       uploadedAt: DateTime.parse(json['uploaded_at']),
     );
   }
@@ -31,8 +37,10 @@ class DocumentModel {
       'id': id,
       'user_id': userId,
       'file_name': fileName,
-      'file_path': filePath,
+      'firebase_url': firebaseUrl,
+      'firebase_path': firebasePath,
       'file_size': fileSize,
+      'file_type': fileType,
       'uploaded_at': uploadedAt.toIso8601String(),
     };
   }

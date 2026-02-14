@@ -9,6 +9,7 @@ class AuthService {
   static const String _keyUserEmail = 'userEmail';
   static const String _keyUserPhone = 'userPhone';
   static const String _keyUserNominee = 'userNominee';
+  static const String _keyUserProfilePicture = 'userProfilePicture';
 
   final DatabaseService _dbService = DatabaseService();
 
@@ -62,6 +63,7 @@ class AuthService {
           email: user.email,
           phoneNumber: user.phoneNumber,
           nomineeNumber: user.nomineeNumber,
+          profilePictureUrl: user.profilePictureUrl,
         );
         return true;
       }
@@ -78,6 +80,7 @@ class AuthService {
     required String email,
     required String phoneNumber,
     required String nomineeNumber,
+    String? profilePictureUrl,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);
@@ -86,6 +89,9 @@ class AuthService {
     await prefs.setString(_keyUserEmail, email);
     await prefs.setString(_keyUserPhone, phoneNumber);
     await prefs.setString(_keyUserNominee, nomineeNumber);
+    if (profilePictureUrl != null) {
+      await prefs.setString(_keyUserProfilePicture, profilePictureUrl);
+    }
   }
 
   Future<bool> isLoggedIn() async {
@@ -102,12 +108,14 @@ class AuthService {
     final nominee = prefs.getString(_keyUserNominee);
 
     if (userId != null && name != null && email != null && phone != null && nominee != null) {
+      final profilePicture = prefs.getString(_keyUserProfilePicture);
       return UserModel(
         id: userId,
         name: name,
         email: email,
         phoneNumber: phone,
         nomineeNumber: nominee,
+        profilePictureUrl: profilePicture,
       );
     }
     return null;
@@ -116,5 +124,21 @@ class AuthService {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+  }
+
+  Future<void> saveUser(UserModel user) async {
+    await _saveLoginState(
+      userId: user.id!,
+      name: user.name,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      nomineeNumber: user.nomineeNumber,
+      profilePictureUrl: user.profilePictureUrl,
+    );
+  }
+
+  Future<void> updateProfilePictureUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyUserProfilePicture, url);
   }
 }

@@ -1,10 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/theme.dart';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
+import '../services/firebase_storage_service.dart';
 import '../models/document_model.dart';
 
 class DocsPage extends StatefulWidget {
@@ -17,6 +18,7 @@ class DocsPage extends StatefulWidget {
 class _DocsPageState extends State<DocsPage> {
   final DatabaseService _dbService = DatabaseService();
   final AuthService _authService = AuthService();
+  final FirebaseStorageService _storageService = FirebaseStorageService();
   List<DocumentModel> _documents = [];
   bool _isLoading = true;
   bool _isUploading = false;
@@ -55,35 +57,55 @@ class _DocsPageState extends State<DocsPage> {
         final file = File(result.files.single.path!);
         final fileName = result.files.single.name;
         final fileSize = result.files.single.size;
-        final fileBytes = await file.readAsBytes();
-        final fileContent = base64Encode(fileBytes);
+        final fileExtension = fileName.split('.').last;
+        final fileType = 'application/$fileExtension';
 
         final user = await _authService.getCurrentUser();
         if (user != null) {
-          final success = await _dbService.uploadDocument(
+          final uploadResult = await _storageService.uploadFile(
+            file: file,
             userId: user.id!,
             fileName: fileName,
-            fileContent: fileContent,
-            fileSize: fileSize,
           );
 
-          setState(() => _isUploading = false);
+          if (uploadResult != null) {
+            final success = await _dbService.uploadDocument(
+              userId: user.id!,
+              fileName: fileName,
+              firebaseUrl: uploadResult['firebase_url']!,
+              firebasePath: uploadResult['firebase_path']!,
+              fileSize: fileSize,
+              fileType: fileType,
+            );
 
-          if (success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Document uploaded successfully'),
-                backgroundColor: AppTheme.primary,
-              ),
-            );
-            _loadDocuments();
-          } else if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to upload document'),
-                backgroundColor: Colors.red,
-              ),
-            );
+            setState(() => _isUploading = false);
+
+            if (success && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Document uploaded successfully'),
+                  backgroundColor: AppTheme.primary,
+                ),
+              );
+              _loadDocuments();
+            } else if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to save document metadata'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } else {
+            setState(() => _isUploading = false);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to upload file to Firebase'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
         }
       }
@@ -108,6 +130,79 @@ class _DocsPageState extends State<DocsPage> {
 
   String _getFileExtension(String fileName) {
     return fileName.split('.').last.toUpperCase();
+  }
+
+  Future<void> _deleteDocument(DocumentModel doc) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Document'),
+        content: Text('Are you sure you want to delete "${doc.fileName}"?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await _storageService.deleteFile(doc.firebasePath);
+      final success = await _dbService.deleteDocument(doc.id!);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Document deleted'),
+            backgroundColor: AppTheme.primary,
+          ),
+        );
+        _loadDocuments();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete document'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadDocument(DocumentModel doc) async {
+    try {
+      final Uri url = Uri.parse(doc.firebaseUrl);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open document'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening document: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -181,6 +276,7 @@ class _DocsPageState extends State<DocsPage> {
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
+                          onTap: () => _downloadDocument(doc),
                           leading: Container(
                             width: 50,
                             height: 50,
@@ -229,9 +325,12 @@ class _DocsPageState extends State<DocsPage> {
                               ),
                             ],
                           ),
-                          trailing: const Icon(
-                            Icons.chevron_right,
-                            color: AppTheme.textDark,
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            onPressed: () => _deleteDocument(doc),
                           ),
                         ),
                       );

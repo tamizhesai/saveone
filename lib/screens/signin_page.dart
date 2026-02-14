@@ -3,6 +3,7 @@ import '../config/theme.dart';
 import '../services/auth_service.dart';
 import 'signup_page.dart';
 import 'main_navigation.dart';
+import 'fingerprint_login_page.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -129,6 +130,39 @@ class _SignInPageState extends State<SignInPage> {
                             'Sign In',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FingerprintLoginPage()),
+                    );
+                  },
+                  icon: const Icon(Icons.fingerprint, size: 28),
+                  label: const Text(
+                    'Login with Fingerprint',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    side: const BorderSide(color: AppTheme.primary, width: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
                 const SizedBox(height: 24),

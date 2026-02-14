@@ -4,6 +4,8 @@ class UserModel {
   final String email;
   final String phoneNumber;
   final String nomineeNumber;
+  final int? fingerprintId;
+  final String? profilePictureUrl;
 
   UserModel({
     this.id,
@@ -11,6 +13,8 @@ class UserModel {
     required this.email,
     required this.phoneNumber,
     required this.nomineeNumber,
+    this.fingerprintId,
+    this.profilePictureUrl,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +24,8 @@ class UserModel {
       email: json['email'],
       phoneNumber: json['phone_number'],
       nomineeNumber: json['nominee_number'],
+      fingerprintId: json['fingerprint_id'],
+      profilePictureUrl: json['profile_picture_url'],
     );
   }
 
@@ -30,6 +36,8 @@ class UserModel {
       'email': email,
       'phone_number': phoneNumber,
       'nominee_number': nomineeNumber,
+      'fingerprint_id': fingerprintId,
+      'profile_picture_url': profilePictureUrl,
     };
   }
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1001813168693",
+    "project_id": "saveone-d2799",
+    "storage_bucket": "saveone-d2799.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1001813168693:android:7f109aa3d94ac816b3177c",
+        "android_client_info": {
+          "package_name": "com.example.saveone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCm6f40pxuOiMTFC9XlOzmBYAaM48SsvdY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

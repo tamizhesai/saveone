@@ -15,10 +15,16 @@ A Flutter application with authentication and document management features, back
 - **Documents Page**: 
   - View all uploaded documents
   - Upload new documents using file picker
+  - **Hybrid Storage**: Files stored in Firebase Storage, metadata in PostgreSQL
   - Display file information (name, size, upload date)
 - **Profile Page**: 
   - View user details (name, email, phone, nominee number)
   - Logout button
+
+### Hybrid Storage Architecture
+- **Firebase Storage**: Stores actual document files with secure URLs
+- **PostgreSQL**: Stores user data and document metadata (pointers to Firebase Storage)
+- **Benefits**: Scalable file storage, fast metadata queries, secure access control
 
 ### UI/UX
 - Clean and modern design
@@ -65,7 +71,21 @@ backend/
 - PostgreSQL database
 - Node.js and npm
 
-### 1. Backend Setup
+### 1. Firebase Setup
+
+Configure Firebase for your project:
+```bash
+firebase login
+dart pub global activate flutterfire_cli
+flutterfire configure --project=your-project-id
+```
+
+Enable Firebase Storage in your Firebase Console:
+- Go to Firebase Console > Storage
+- Click "Get Started"
+- Set up security rules (for testing, allow authenticated users)
+
+### 2. Backend Setup
 
 Navigate to the backend directory:
 ```bash
@@ -97,6 +117,11 @@ Create database and tables:
 psql -U postgres -f database.sql
 ```
 
+If migrating from old schema, run:
+```bash
+psql -U postgres -d saveone_db -f migrate_to_firebase.sql
+```
+
 Start the server:
 ```bash
 npm start
@@ -107,7 +132,7 @@ Or for development with auto-reload:
 npm run dev
 ```
 
-### 2. Flutter App Setup
+### 3. Flutter App Setup
 
 Install Flutter dependencies:
 ```bash
@@ -124,9 +149,11 @@ flutter run
 ### Flutter
 - `http: ^1.1.0` - HTTP requests
 - `shared_preferences: ^2.2.2` - Local storage
-- `file_picker: ^6.1.1` - File selection
+- `file_picker: ^8.1.4` - File selection
 - `postgres: ^2.6.2` - PostgreSQL client
 - `crypto: ^3.0.3` - Password hashing
+- `firebase_core: ^3.8.1` - Firebase initialization
+- `firebase_storage: ^12.3.8` - Firebase Storage for file uploads
 
 ### Backend
 - `express: ^4.18.2` - Web framework
@@ -163,8 +190,10 @@ flutter run
 - id (SERIAL PRIMARY KEY)
 - user_id (INTEGER FOREIGN KEY)
 - file_name (VARCHAR)
-- file_path (TEXT)
+- firebase_url (TEXT) - Download URL from Firebase Storage
+- firebase_path (TEXT) - Storage path in Firebase
 - file_size (INTEGER)
+- file_type (VARCHAR) - MIME type
 - uploaded_at (TIMESTAMP)
 
 ## Security Notes

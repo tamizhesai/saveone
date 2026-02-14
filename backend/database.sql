@@ -9,6 +9,8 @@ CREATE TABLE users (
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     nominee_number VARCHAR(20) NOT NULL,
+    fingerprint_id INTEGER UNIQUE,
+    profile_picture_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -16,8 +18,10 @@ CREATE TABLE documents (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     file_name VARCHAR(255) NOT NULL,
-    file_path TEXT NOT NULL,
+    firebase_url TEXT NOT NULL,
+    firebase_path TEXT NOT NULL,
     file_size INTEGER NOT NULL,
+    file_type VARCHAR(100),
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

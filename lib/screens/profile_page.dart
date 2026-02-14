@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../config/theme.dart';
 import '../services/auth_service.dart';
+import '../services/database_service.dart';
+import '../services/firebase_storage_service.dart';
 import '../models/user_model.dart';
 import 'signin_page.dart';
 
@@ -13,8 +17,12 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final AuthService _authService = AuthService();
+  final DatabaseService _dbService = DatabaseService();
+  final FirebaseStorageService _storageService = FirebaseStorageService();
+  final ImagePicker _imagePicker = ImagePicker();
   UserModel? _user;
   bool _isLoading = true;
+  bool _isUploadingPicture = false;
 
   @override
   void initState() {
@@ -29,6 +37,104 @@ class _ProfilePageState extends State<ProfilePage> {
       _user = user;
       _isLoading = false;
     });
+  }
+
+  Future<void> _pickAndUploadProfilePicture() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: AppTheme.primary),
+              title: const Text('Camera'),
+              onTap: () {
+                Navigator.pop(context);
+                _uploadProfilePicture(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: AppTheme.primary),
+              title: const Text('Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _uploadProfilePicture(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadProfilePicture(ImageSource source) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (image == null) return;
+
+      setState(() => _isUploadingPicture = true);
+
+      final file = File(image.path);
+      final uploadResult = await _storageService.uploadProfilePicture(
+        file: file,
+        userId: _user!.id!,
+      );
+
+      if (uploadResult != null) {
+        final url = uploadResult['firebase_url']!;
+        final success = await _dbService.updateProfilePicture(_user!.id!, url);
+
+        if (success) {
+          await _authService.updateProfilePictureUrl(url);
+          await _loadUserData();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profile picture updated'),
+                backgroundColor: AppTheme.primary,
+              ),
+            );
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save profile picture'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to upload profile picture'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingPicture = false);
+      }
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -142,16 +248,57 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 20),
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.person,
-                          size: 80,
-                          color: AppTheme.primary,
+                      GestureDetector(
+                        onTap: _isUploadingPicture
+                            ? null
+                            : _pickAndUploadProfilePicture,
+                        child: Stack(
+                          children: [
+                            _user!.profilePictureUrl != null
+                                ? CircleAvatar(
+                                    radius: 64,
+                                    backgroundImage: NetworkImage(
+                                      _user!.profilePictureUrl!,
+                                    ),
+                                    backgroundColor:
+                                        AppTheme.primary.withOpacity(0.1),
+                                  )
+                                : CircleAvatar(
+                                    radius: 64,
+                                    backgroundColor:
+                                        AppTheme.primary.withOpacity(0.1),
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 80,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: _isUploadingPicture
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.camera_alt,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 24),
